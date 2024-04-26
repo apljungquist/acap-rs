@@ -1,0 +1,42 @@
+{
+    "schemaVersion": "1.5.0",
+    "acapPackageConf": {
+        "setup": {
+            "appName": "hello_reverse_proxy",
+            "vendor": "Axis Communications",
+            "runMode": "never",
+            "version": "1.0.0"
+        },
+        "configuration": {
+            "reverseProxy": [
+                {
+                    "apiPath": "api/admin",
+                    "apiType": "http",
+                    "target": "unix:/run/http/hello_reverse_proxy/admin.socket",
+                    "access": "admin"
+                },
+                {
+                    "apiPath": "api/operator",
+                    "apiType": "http",
+                    "target": "unix:/run/http/hello_reverse_proxy/operator.socket",
+                    "access": "operator"
+                },
+                {
+                    "apiPath": "api/viewer",
+                    "apiType": "http",
+                    "target": "unix:/run/http/hello_reverse_proxy/viewer.socket",
+                    "access": "viewer"
+                }
+            ]
+        }
+    },
+    "resources": {
+        "linux": {
+            "user": {
+                "groups": [
+                    "www"
+                ]
+            }
+        }
+    }
+}
