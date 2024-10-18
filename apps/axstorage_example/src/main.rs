@@ -1,28 +1,28 @@
 //! An example of how to handle storage disks using the Edge Storage API.
 
 use std::{
+    cell::RefCell,
     ffi::CString,
     fs::OpenOptions,
     io::Write,
     path::PathBuf,
     process::ExitCode,
-    sync::{
-        atomic::{AtomicU32, Ordering},
-        Mutex,
-    },
+    sync::atomic::{AtomicU32, Ordering},
 };
 
-use axstorage::{list, StatusEventId, Storage, StorageId, SubscriptionId, Type};
-use glib::{ControlFlow, Error};
+use axstorage::{list, StatusEventId, Storage, SubscriptionId, Type};
+use glib::{ControlFlow, Error, GString, GStringPtr};
 use log::{error, info, warn};
 
-static DISKS_LIST: Mutex<Vec<DiskItem>> = Mutex::new(Vec::new());
+thread_local! {
+    static DISKS_LIST: RefCell<Vec<DiskItem>> = const { RefCell::new(Vec::new()) };
+}
 
 #[derive(Debug)]
 struct DiskItem {
     storage: Option<Storage>,
     storage_type: Option<Type>,
-    storage_id: StorageId,
+    storage_id: GStringPtr,
     storage_path: Option<CString>,
     subscription_id: SubscriptionId,
     setup: bool,
@@ -35,39 +35,41 @@ struct DiskItem {
 fn write_data(data: &str) -> ControlFlow {
     static COUNTER: AtomicU32 = AtomicU32::new(1);
 
-    for item in DISKS_LIST.lock().unwrap().iter() {
-        if item.available && item.writable && !item.full && item.setup {
-            let filename =
-                PathBuf::from(item.storage_path.as_ref().unwrap().to_str().unwrap()).join(data);
-            let file = match OpenOptions::new().append(true).create(true).open(&filename) {
-                Ok(f) => f,
-                Err(e) => {
-                    warn!("Failed to open {filename:?}. Error: {e:?}");
+    DISKS_LIST.with_borrow(|disks_list| {
+        for item in disks_list.iter() {
+            if item.available && item.writable && !item.full && item.setup {
+                let filename =
+                    PathBuf::from(item.storage_path.as_ref().unwrap().to_str().unwrap()).join(data);
+                let file = match OpenOptions::new().append(true).create(true).open(&filename) {
+                    Ok(f) => f,
+                    Err(e) => {
+                        warn!("Failed to open {filename:?}. Error: {e:?}");
+                        return ControlFlow::Break;
+                    }
+                };
+                let counter = COUNTER.fetch_add(1, Ordering::Relaxed);
+                if let Err(e) = writeln!(&file, "counter: {counter}") {
+                    warn!("Failed to write to {filename:?} because {e:?}");
                     return ControlFlow::Break;
                 }
-            };
-            let counter = COUNTER.fetch_add(1, Ordering::Relaxed);
-            if let Err(e) = writeln!(&file, "counter: {counter}") {
-                warn!("Failed to write to {filename:?} because {e:?}");
-                return ControlFlow::Break;
+                drop(file);
+                info!("Writing to {filename:?}");
             }
-            drop(file);
-            info!("Writing to {filename:?}");
         }
-    }
-    ControlFlow::Continue
+        ControlFlow::Continue
+    })
 }
 
 fn find_disk_item<'a>(
     disks_list: &'a mut [DiskItem],
-    storage_id: &StorageId,
+    storage_id: &GStringPtr,
 ) -> Option<&'a mut DiskItem> {
     disks_list
         .iter_mut()
         .find(|item| item.storage_id == *storage_id)
 }
 
-fn release_disk_cb(storage_id: &StorageId, result: Option<Error>) {
+fn release_disk_cb(storage_id: &GString, result: Option<Error>) {
     info!("Release of {storage_id}");
     if let Some(e) = result {
         warn!("Error while releasing {storage_id}: {e:?}")
@@ -75,10 +77,11 @@ fn release_disk_cb(storage_id: &StorageId, result: Option<Error>) {
 }
 
 fn free_disk_item() {
-    for item in DISKS_LIST.lock().unwrap().drain(..) {
+    let mut disks_list = DISKS_LIST.take();
+    for item in disks_list.drain(..) {
         if item.setup {
             match axstorage::release_async(&mut item.storage.unwrap(), {
-                let storage_id = item.storage_id.clone();
+                let storage_id = GString::from(item.storage_id.to_gstr());
                 move |r| release_disk_cb(&storage_id, r)
             }) {
                 Ok(()) => info!("Release of {} was successful", item.storage_id),
@@ -132,92 +135,94 @@ fn setup_disk_cb(storage: Result<Storage, Error>) {
         }
     };
 
-    let mut disks_list = DISKS_LIST.lock().unwrap();
-    let disk = find_disk_item(&mut disks_list, &storage_id).unwrap();
-    disk.storage = Some(storage);
-    disk.storage_type = Some(storage_type);
-    disk.storage_path = Some(path.clone());
-    disk.setup = true;
+    DISKS_LIST.with_borrow_mut(|disks_list| {
+        let disk = find_disk_item(disks_list, &storage_id).unwrap();
+        disk.storage = Some(storage);
+        disk.storage_type = Some(storage_type);
+        disk.storage_path = Some(path.clone());
+        disk.setup = true;
+    });
 
     info!("Disk: {storage_id} has been setup in {path:?}");
 }
 
-fn subscribe_cb(storage_id: &mut StorageId, error: Option<Error>) {
+fn subscribe_cb(storage_id: &GStringPtr, error: Option<Error>) {
     if let Some(e) = error {
         warn!("Failed to subscribe to {storage_id}. Error: {e:?}");
         return;
     }
 
     info!("Subscribe for the events of {storage_id}");
-    let mut disks_list = DISKS_LIST.lock().unwrap();
-    let disk = find_disk_item(&mut disks_list, storage_id).unwrap();
+    DISKS_LIST.with_borrow_mut(|disks_list| {
+        let disk = find_disk_item(disks_list, storage_id).unwrap();
 
-    let exiting = match axstorage::get_status(storage_id, StatusEventId::Exiting) {
-        Ok(t) => t,
-        Err(e) => {
-            warn!("Failed to get EXITING event for {storage_id}. Error: {e:?}");
-            return;
-        }
-    };
-
-    let available = match axstorage::get_status(storage_id, StatusEventId::Available) {
-        Ok(t) => t,
-        Err(e) => {
-            warn!("Failed to get AVAILABLE event for {storage_id}. Error: {e:?}");
-            return;
-        }
-    };
-
-    let writable = match axstorage::get_status(storage_id, StatusEventId::Writable) {
-        Ok(t) => t,
-        Err(e) => {
-            warn!("Failed to get WRITABLE event for {storage_id}. Error: {e:?}");
-            return;
-        }
-    };
-
-    let full = match axstorage::get_status(storage_id, StatusEventId::Full) {
-        Ok(t) => t,
-        Err(e) => {
-            warn!("Failed to get FULL event for {storage_id}. Error: {e:?}");
-            return;
-        }
-    };
-
-    disk.writable = writable;
-    disk.available = available;
-    disk.exiting = exiting;
-    disk.full = full;
-
-    info!(
-        "Status of events for {storage_id}: {}writable, {}available, {}exiting, {}full",
-        if writable { "" } else { "not " },
-        if available { "" } else { "not " },
-        if exiting { "" } else { "not " },
-        if full { "" } else { "not " },
-    );
-
-    if disk.exiting && disk.setup {
-        match axstorage::release_async(disk.storage.as_mut().unwrap(), {
-            let storage_id = storage_id.clone();
-            move |r| release_disk_cb(&storage_id, r)
-        }) {
-            Ok(()) => {
-                info!("Release of {storage_id} was successful");
-                disk.setup = false;
+        let exiting = match axstorage::get_status(storage_id, StatusEventId::Exiting) {
+            Ok(t) => t,
+            Err(e) => {
+                warn!("Failed to get EXITING event for {storage_id}. Error: {e:?}");
+                return;
             }
-            Err(e) => warn!("Failed to release {storage_id}. Error: {e:?}"),
+        };
+
+        let available = match axstorage::get_status(storage_id, StatusEventId::Available) {
+            Ok(t) => t,
+            Err(e) => {
+                warn!("Failed to get AVAILABLE event for {storage_id}. Error: {e:?}");
+                return;
+            }
+        };
+
+        let writable = match axstorage::get_status(storage_id, StatusEventId::Writable) {
+            Ok(t) => t,
+            Err(e) => {
+                warn!("Failed to get WRITABLE event for {storage_id}. Error: {e:?}");
+                return;
+            }
+        };
+
+        let full = match axstorage::get_status(storage_id, StatusEventId::Full) {
+            Ok(t) => t,
+            Err(e) => {
+                warn!("Failed to get FULL event for {storage_id}. Error: {e:?}");
+                return;
+            }
+        };
+
+        disk.writable = writable;
+        disk.available = available;
+        disk.exiting = exiting;
+        disk.full = full;
+
+        info!(
+            "Status of events for {storage_id}: {}writable, {}available, {}exiting, {}full",
+            if writable { "" } else { "not " },
+            if available { "" } else { "not " },
+            if exiting { "" } else { "not " },
+            if full { "" } else { "not " },
+        );
+
+        if disk.exiting && disk.setup {
+            match axstorage::release_async(disk.storage.as_mut().unwrap(), {
+                let storage_id = GString::from(storage_id.to_gstr());
+                move |r| release_disk_cb(&storage_id, r)
+            }) {
+                Ok(()) => {
+                    info!("Release of {storage_id} was successful");
+                    disk.setup = false;
+                }
+                Err(e) => warn!("Failed to release {storage_id}. Error: {e:?}"),
+            }
+        } else if disk.writable && !disk.full && !disk.setup {
+            info!("Setup {storage_id}");
+            match axstorage::setup_async(storage_id, setup_disk_cb) {
+                Ok(()) => info!("Setup of {storage_id} was successful"),
+                Err(e) => warn!("Failed to setup {storage_id}, reason: {e:?}"),
+            }
         }
-    } else if disk.writable && !disk.full && !disk.setup {
-        info!("Setup {storage_id}");
-        match axstorage::setup_async(storage_id, setup_disk_cb) {
-            Ok(()) => info!("Setup of {storage_id} was successful"),
-            Err(e) => warn!("Failed to setup {storage_id}, reason: {e:?}"),
-        }
-    }
+    })
 }
 
-fn new_disk_item(mut storage_id: StorageId) -> Option<DiskItem> {
+fn new_disk_item(mut storage_id: GStringPtr) -> Option<DiskItem> {
     let subscription_id = match axstorage::subscribe(&mut storage_id, subscribe_cb) {
         Ok(t) => t,
         Err(e) => {
@@ -264,7 +269,7 @@ fn main() -> ExitCode {
             }
         };
         println!("push...");
-        DISKS_LIST.lock().unwrap().push(item);
+        DISKS_LIST.with_borrow_mut(|disks_list| disks_list.push(item));
         println!("pushed.");
     }
 

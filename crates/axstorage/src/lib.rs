@@ -1,4 +1,6 @@
 //! Bindings for the [Bounding Box API](https://axiscommunications.github.io/acap-documentation/docs/api/src/api/bbox/html/bbox_8h.html).
+use std::{ffi::CString, ptr};
+
 use axstorage_sys::{
     ax_storage_get_path, ax_storage_get_status, ax_storage_get_storage_id, ax_storage_get_type,
     ax_storage_list, ax_storage_release_async, ax_storage_setup_async, ax_storage_subscribe,
@@ -10,17 +12,10 @@ use axstorage_sys::{
 };
 use glib::{
     ffi::GError,
-    translate::{from_glib_full, FromGlibPtrFull, GlibPtrDefault, TransparentPtrType},
-    Error, List,
+    translate::{from_glib_full, FromGlibPtrFull},
+    Error, GStringPtr, List,
 };
-use glib_sys::{g_free, g_str_equal, g_strdup, gpointer, GTRUE};
-use std::mem::ManuallyDrop;
-use std::ops::DerefMut;
-use std::{
-    ffi::{c_char, CStr, CString},
-    fmt::{Display, Formatter, Pointer},
-    ptr,
-};
+use glib_sys::{gpointer, GTRUE};
 
 macro_rules! try_func {
     ($func:ident, $($arg:expr),+ $(,)?) => {{
@@ -78,7 +73,7 @@ impl Type {
     }
 }
 
-pub fn list() -> Result<List<StorageId>, Error> {
+pub fn list() -> Result<List<GStringPtr>, Error> {
     unsafe {
         let mut error: *mut GError = ptr::null_mut();
         let list = ax_storage_list(&mut error);
@@ -90,16 +85,16 @@ pub fn list() -> Result<List<StorageId>, Error> {
     }
 }
 
-pub fn subscribe<F>(storage_id: &mut StorageId, callback: F) -> Result<SubscriptionId, Error>
+pub fn subscribe<F>(storage_id: &mut GStringPtr, callback: F) -> Result<SubscriptionId, Error>
 where
-    F: FnMut(&mut StorageId, Option<Error>) + Send,
+    F: FnMut(&GStringPtr, Option<Error>) + Send,
 {
     unsafe {
         let callback = Box::into_raw(Box::new(callback)) as gpointer;
         // Note that callback will be called anytime the status changes
         let subscription_id = try_func!(
             ax_storage_subscribe,
-            storage_id.0 as *mut gchar,
+            storage_id.as_ptr() as *mut _,
             Some(subscribe_callback_trampoline::<F>),
             callback
         );
@@ -114,16 +109,17 @@ unsafe extern "C" fn subscribe_callback_trampoline<F>(
     user_data: gpointer,
     error: *mut GError,
 ) where
-    F: FnMut(&mut StorageId, Option<Error>) + Send,
+    F: FnMut(&GStringPtr, Option<Error>) + Send,
 {
-    let mut storage_id = ManuallyDrop::new(StorageId(storage_id as gpointer));
+    let storage_id: &GStringPtr =
+        &*(&(storage_id as gpointer) as *const gpointer as *const GStringPtr);
     let error = if error.is_null() {
         None
     } else {
         Some(Error::from_glib_full(error))
     };
     let callback = &mut *(user_data as *mut F);
-    callback(storage_id.deref_mut(), error);
+    callback(storage_id.as_ref(), error);
 }
 
 pub fn unsubscribe(id: &SubscriptionId) -> Result<(), Error> {
@@ -135,14 +131,16 @@ pub fn unsubscribe(id: &SubscriptionId) -> Result<(), Error> {
 }
 
 pub fn setup_async<F: FnMut(Result<Storage, Error>)>(
-    storage_id: &mut StorageId,
+    storage_id: &GStringPtr,
     callback: F,
 ) -> Result<(), Error> {
     unsafe {
         let callback = Box::into_raw(Box::new(callback)) as gpointer;
         let success = try_func!(
             ax_storage_setup_async,
-            storage_id.0 as *mut gchar,
+            // FIXME: Verify that we can cast to mut her and in places like this.
+            // ax_storage_setup_async never makes use of the mutability
+            storage_id.as_ptr() as *mut _,
             Some(setup_async_callback_trampoline::<F>),
             callback
         );
@@ -197,20 +195,18 @@ where
     let callback = &mut *(user_data as *mut F);
     callback(error);
 }
-pub fn get_path(storage: &mut Storage) -> Result<CString, Error> {
+pub fn get_path(storage: &Storage) -> Result<CString, Error> {
     unsafe {
         let path = try_func!(ax_storage_get_path, storage.raw);
         Ok(CString::from_raw(path))
     }
 }
 
-// TODO: Check if these really need exclusive reference to self
-
-pub fn get_status(storage_id: &mut StorageId, event: StatusEventId) -> Result<bool, Error> {
+pub fn get_status(storage_id: &GStringPtr, event: StatusEventId) -> Result<bool, Error> {
     unsafe {
         let mut error: *mut GError = ptr::null_mut();
         let status =
-            ax_storage_get_status(storage_id.0 as *mut gchar, event.into_raw(), &mut error);
+            ax_storage_get_status(storage_id.as_ptr() as *mut _, event.into_raw(), &mut error);
         if !error.is_null() {
             return Err(Error::from_glib_full(error));
         }
@@ -218,10 +214,12 @@ pub fn get_status(storage_id: &mut StorageId, event: StatusEventId) -> Result<bo
     }
 }
 
-pub fn get_storage_id(storage: &mut Storage) -> Result<StorageId, Error> {
+pub fn get_storage_id(storage: &mut Storage) -> Result<GStringPtr, Error> {
     unsafe {
-        let storage_id = try_func!(ax_storage_get_storage_id, storage.raw);
-        Ok(StorageId(storage_id as gpointer))
+        let mut storage_id = try_func!(ax_storage_get_storage_id, storage.raw);
+        let storage_id: *mut gpointer = &mut (storage_id as gpointer);
+        let p: GStringPtr = ptr::read(storage_id as *mut GStringPtr);
+        Ok(p)
     }
 }
 
@@ -231,47 +229,6 @@ pub fn get_type(storage: &mut Storage) -> Result<Type, Error> {
         Ok(Type::from_raw(storage_type))
     }
 }
-
-#[derive(Debug, Eq)]
-#[repr(transparent)]
-pub struct StorageId(gpointer);
-
-impl Clone for StorageId {
-    fn clone(&self) -> Self {
-        unsafe { Self(g_strdup(self.0 as *const gchar) as gpointer) }
-    }
-}
-
-impl GlibPtrDefault for StorageId {
-    type GlibType = *mut gchar;
-}
-
-impl PartialEq<Self> for StorageId {
-    fn eq(&self, other: &Self) -> bool {
-        unsafe { g_str_equal(self.0, other.0) == GTRUE }
-    }
-}
-
-unsafe impl TransparentPtrType for StorageId {}
-
-impl Display for StorageId {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        unsafe {
-            let s = CStr::from_ptr(self.0 as *const c_char);
-            s.fmt(f)
-        }
-    }
-}
-impl Drop for StorageId {
-    fn drop(&mut self) {
-        unsafe {
-            println!("Dropping StorageId@{:?}", self.0);
-            g_free(self.0);
-        }
-    }
-}
-
-unsafe impl Send for StorageId {}
 
 #[derive(Debug)]
 pub struct SubscriptionId(guint);
