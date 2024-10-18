@@ -85,6 +85,7 @@ pub fn list() -> Result<List<GStringPtr>, Error> {
     }
 }
 
+// TODO: Explore removing mut
 pub fn subscribe<F>(storage_id: &mut GStringPtr, callback: F) -> Result<guint, Error>
 where
     F: FnMut(&GStringPtr, Option<Error>) + Send,
@@ -94,6 +95,7 @@ where
         // Note that callback will be called anytime the status changes
         let subscription_id = try_func!(
             ax_storage_subscribe,
+            // FIXME: Is it safe to cast to mut?
             storage_id.as_ptr() as *mut _,
             Some(subscribe_callback_trampoline::<F>),
             callback
@@ -119,7 +121,7 @@ unsafe extern "C" fn subscribe_callback_trampoline<F>(
         Some(Error::from_glib_full(error))
     };
     let callback = &mut *(user_data as *mut F);
-    callback(storage_id.as_ref(), error);
+    callback(storage_id, error);
 }
 
 pub fn unsubscribe(id: guint) -> Result<(), Error> {
@@ -166,6 +168,7 @@ unsafe extern "C" fn setup_async_callback_trampoline<F>(
     callback(result);
 }
 
+// TODO: Explore removing mut
 pub fn release_async<F>(storage: &mut Storage, callback: F) -> Result<(), Error>
 where
     F: FnMut(Option<Error>) + Send,
@@ -195,7 +198,9 @@ where
     let callback = &mut *(user_data as *mut F);
     callback(error);
 }
-pub fn get_path(storage: &Storage) -> Result<CString, Error> {
+
+// TODO: Explore removing mut
+pub fn get_path(storage: &mut Storage) -> Result<CString, Error> {
     unsafe {
         let path = try_func!(ax_storage_get_path, storage.raw);
         Ok(CString::from_raw(path))
@@ -205,6 +210,7 @@ pub fn get_path(storage: &Storage) -> Result<CString, Error> {
 pub fn get_status(storage_id: &GStringPtr, event: StatusEventId) -> Result<bool, Error> {
     unsafe {
         let mut error: *mut GError = ptr::null_mut();
+        // FIXME: Is it safe to cast to mut?
         let status =
             ax_storage_get_status(storage_id.as_ptr() as *mut _, event.into_raw(), &mut error);
         if !error.is_null() {
@@ -214,15 +220,17 @@ pub fn get_status(storage_id: &GStringPtr, event: StatusEventId) -> Result<bool,
     }
 }
 
+// TODO: Explore removing mut
 pub fn get_storage_id(storage: &mut Storage) -> Result<GStringPtr, Error> {
     unsafe {
-        let mut storage_id = try_func!(ax_storage_get_storage_id, storage.raw);
+        let storage_id = try_func!(ax_storage_get_storage_id, storage.raw);
         let storage_id: *mut gpointer = &mut (storage_id as gpointer);
         let p: GStringPtr = ptr::read(storage_id as *mut GStringPtr);
         Ok(p)
     }
 }
 
+// TODO: Explore removing mut
 pub fn get_type(storage: &mut Storage) -> Result<Type, Error> {
     unsafe {
         let storage_type = try_func!(ax_storage_get_type, storage.raw);
