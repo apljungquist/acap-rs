@@ -85,7 +85,7 @@ pub fn list() -> Result<List<GStringPtr>, Error> {
     }
 }
 
-pub fn subscribe<F>(storage_id: &mut GStringPtr, callback: F) -> Result<SubscriptionId, Error>
+pub fn subscribe<F>(storage_id: &mut GStringPtr, callback: F) -> Result<guint, Error>
 where
     F: FnMut(&GStringPtr, Option<Error>) + Send,
 {
@@ -99,7 +99,7 @@ where
             callback
         );
         debug_assert_ne!(subscription_id, 0);
-        Ok(SubscriptionId(subscription_id))
+        Ok(subscription_id)
         // TODO: Drop callback.
     }
 }
@@ -122,9 +122,9 @@ unsafe extern "C" fn subscribe_callback_trampoline<F>(
     callback(storage_id.as_ref(), error);
 }
 
-pub fn unsubscribe(id: &SubscriptionId) -> Result<(), Error> {
+pub fn unsubscribe(id: guint) -> Result<(), Error> {
     unsafe {
-        let success = try_func!(ax_storage_unsubscribe, id.0);
+        let success = try_func!(ax_storage_unsubscribe, id);
         debug_assert_eq!(success, GTRUE);
         Ok(())
     }
@@ -229,6 +229,3 @@ pub fn get_type(storage: &mut Storage) -> Result<Type, Error> {
         Ok(Type::from_raw(storage_type))
     }
 }
-
-#[derive(Debug)]
-pub struct SubscriptionId(guint);

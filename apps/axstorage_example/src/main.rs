@@ -1,5 +1,9 @@
 //! An example of how to handle storage disks using the Edge Storage API.
 
+use axstorage::{list, StatusEventId, Storage, Type};
+use glib::{ControlFlow, Error, GString, GStringPtr};
+use log::{error, info, warn};
+use std::ffi::c_uint;
 use std::{
     cell::RefCell,
     ffi::CString,
@@ -9,10 +13,6 @@ use std::{
     process::ExitCode,
     sync::atomic::{AtomicU32, Ordering},
 };
-
-use axstorage::{list, StatusEventId, Storage, SubscriptionId, Type};
-use glib::{ControlFlow, Error, GString, GStringPtr};
-use log::{error, info, warn};
 
 thread_local! {
     static DISKS_LIST: RefCell<Vec<DiskItem>> = const { RefCell::new(Vec::new()) };
@@ -24,7 +24,7 @@ struct DiskItem {
     storage_type: Option<Type>,
     storage_id: GStringPtr,
     storage_path: Option<CString>,
-    subscription_id: SubscriptionId,
+    subscription_id: c_uint,
     setup: bool,
     writable: bool,
     available: bool,
@@ -89,7 +89,7 @@ fn free_disk_item() {
             }
         }
 
-        match axstorage::unsubscribe(&item.subscription_id) {
+        match axstorage::unsubscribe(item.subscription_id) {
             Ok(()) => info!(
                 "Unsubscribed events of {:?}",
                 item.storage_path.as_ref().unwrap()
