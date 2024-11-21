@@ -14,7 +14,7 @@ jobs:
       - name: Install dev container dependencies
         run: npm install -g @devcontainers/cli@0.65.0
       - name: Create dev container
-        run: devcontainer up --workspace-folder .
+        run: devcontainer up --workspace-folder . --cache-from=type=gha --cache-to=type=gha,mode=max
       - name: Update generated files
         run: devcontainer exec --workspace-folder . make --always-make check_generated_files check_generated_files_container
       - name: Update generated without acap-build
