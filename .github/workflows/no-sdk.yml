@@ -12,6 +12,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - run: rustup show
+      - run: cargo install --locked cargo-about@0.6.2
+      - run: cargo install --locked --path ../crates/cargo-acap-build
       - run: make apps/hello_world/LICENSE
       - run: cargo-acap-build -- --package hello_world --target aarch64
       - run: shasum target/aarch64/**
