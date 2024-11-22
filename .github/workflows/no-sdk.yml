@@ -1,0 +1,17 @@
+name: on host workflow
+
+on:
+  push:
+    branches: [ acap-build ]
+  pull_request:
+
+jobs:
+  debian_and_ubuntu:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - run: rustup show
+      - run: make apps/hello_world/LICENSE
+      - run: cargo-acap-build -- --package hello_world --target aarch64
+      - run: shasum target/aarch64/**
