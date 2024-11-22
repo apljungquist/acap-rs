@@ -11,9 +11,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - run: sudo apt-get update
+      - run: sudo apt-get install g++-aarch64-linux-gnu g++-arm-linux-gnueabihf
       - run: rustup show
       - run: cargo install --locked cargo-about@0.6.2
       - run: cargo install --locked --path crates/cargo-acap-build
       - run: make apps/hello_world/LICENSE
-      - run: cargo-acap-build --target aarch64 -- --package hello_world
+      - run: cargo-acap-build -- --package hello_world
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+          CARGO_TARGET_THUMBV7NEON_UNKNOWN_LINUX_GNUEABIHF_LINKER: arm-linux-gnueabihf-gcc
       - run: shasum target/aarch64/**
