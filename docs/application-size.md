@@ -37,3 +37,11 @@ Note that large does not necessarily mean wasteful.
 This is especially important if a feature directly or indirectly depends on a particularly large crate.
 
 <!-- TODO: Does deriving serde affect binary size or just compilation time? -->
+
+## Other
+
+- Disable logs statically:
+  - https://docs.rs/log/latest/log/#compile-time-filters
+  - https://docs.rs/tracing/latest/tracing/level_filters/index.html#compile-time-filters
+
+Works best with LTO?
