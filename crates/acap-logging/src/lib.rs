@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 #![allow(clippy::needless_doctest_main)]
 #![doc = include_str!("../README.md")]
+#[cfg(feature = "tty")]
 use std::{env, io::IsTerminal};
 
 use log::debug;
@@ -26,13 +27,19 @@ pub fn init_logger() {
     // Using `su -pc "..."` just says the "Connection to ... closed", and
     // I have not found another way to run as the SDK user over ssh and allocate a tty, so
     // if we detect an `env_logger` configuration we write to stderr anyway.
+    #[cfg(feature = "tty")]
     if std::io::stdout().is_terminal()
         || env::var_os("RUST_LOG").is_some()
         || env::var_os("RUST_LOG_STYLE").is_some()
     {
         env_logger::init();
-    } else {
-        init_syslog();
+        debug!("Logging initialized");
+        return;
     }
+
+    // When `hello_world` is heavily optimized for size this branch adds about increases the
+    // size from 60k to 120k.
+    // TODO: Consider optimizing the setup or finding a more lightweight crate.
+    init_syslog();
     debug!("Logging initialized");
 }
