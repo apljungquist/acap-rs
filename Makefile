@@ -266,6 +266,8 @@ Cargo.lock: FORCE
 		$^
 
 apps-$(AXIS_DEVICE_ARCH).checksum: target-$(AXIS_DEVICE_ARCH)/acap/_envoy
+	ls -al apps/*
+	ls -al target-$(AXIS_DEVICE_ARCH)/$(AXIS_DEVICE_ARCH)/*
 	find target-$(AXIS_DEVICE_ARCH)/acap/ -name '*.eap' | LC_ALL=C sort | xargs shasum > $@
 
 apps-$(AXIS_DEVICE_ARCH).filesize: target-$(AXIS_DEVICE_ARCH)/acap/_envoy
