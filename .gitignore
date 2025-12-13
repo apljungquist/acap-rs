@@ -1,6 +1,9 @@
+/.direnv/
 /.env
 /.idea/
 /init_env.sh
+/result
+/result-*
 /target/
 /target-*/
 /workspaces/*/target/
