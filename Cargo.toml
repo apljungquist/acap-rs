@@ -64,6 +64,9 @@ mdb-sys = { path = "crates/mdb-sys" }
 [workspace.package]
 edition = "2021"
 
+[workspace.lints.rust]
+unsafe_code = "deny"
+
 # For projects that build only apps it's probably easier to customize the releae profile.
 [profile.app]
 inherits = "release"

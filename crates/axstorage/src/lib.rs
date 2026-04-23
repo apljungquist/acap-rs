@@ -3,4 +3,6 @@
 //! This crate will provide two APIs with different goals:
 //! - ergo will strive to enable all but the most exotic use cases in an easy and idiomatic way.
 //! - [`flex`] strives to facilitate transitioning from C.
+#![allow(unsafe_code)]
+
 pub mod flex;

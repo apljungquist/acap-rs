@@ -11,3 +11,6 @@ log = { workspace = true }
 
 acap-logging = { workspace = true }
 axevent = { workspace = true }
+
+[lints]
+workspace = true

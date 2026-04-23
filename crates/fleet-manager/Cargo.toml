@@ -18,3 +18,6 @@ url = { workspace = true, features = ["serde"] }
 device-manager = { workspace = true }
 acap-vapix = { workspace = true }
 cli-version = { workspace = true }
+
+[lints]
+workspace = true

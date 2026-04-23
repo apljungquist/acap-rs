@@ -8,3 +8,6 @@ license = "MIT"
 axstorage-sys = { workspace = true }
 glib = { workspace = true }
 glib-sys = { workspace = true }
+
+[lints]
+workspace = true

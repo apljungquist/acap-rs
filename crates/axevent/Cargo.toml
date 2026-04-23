@@ -11,3 +11,6 @@ log = { workspace = true }
 thiserror = { workspace = true }
 
 axevent-sys = { workspace = true }
+
+[lints]
+workspace = true

@@ -3,6 +3,7 @@
 #![allow(non_snake_case)]
 #![allow(improper_ctypes)]
 #![allow(clippy::useless_transmute)]
+#![allow(unsafe_code)]
 
 use glib_sys::*;
 

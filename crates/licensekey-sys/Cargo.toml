@@ -8,3 +8,6 @@ license = "MIT"
 [build-dependencies]
 bindgen = { workspace = true }
 pkg-config = { workspace = true }
+
+[lints]
+workspace = true

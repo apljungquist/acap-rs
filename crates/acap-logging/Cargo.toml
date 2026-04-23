@@ -15,3 +15,6 @@ syslog = { workspace = true }
 
 [features]
 default = ["env_logger/auto-color"]
+
+[lints]
+workspace = true

@@ -6,3 +6,6 @@ publish = false
 
 [dependencies]
 # Don't add any dependencies without also updating the `LICENSE` file.
+
+[lints]
+workspace = true

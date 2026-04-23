@@ -14,3 +14,6 @@ log = { workspace = true }
 syslog = { workspace = true }
 
 
+
+[lints]
+workspace = true

@@ -6,3 +6,6 @@ license = "MIT"
 
 [dependencies]
 bbox-sys = { workspace = true }
+
+[lints]
+workspace = true

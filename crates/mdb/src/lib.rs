@@ -3,6 +3,8 @@
 //! [ACAP]: https://axiscommunications.github.io/acap-documentation/
 //! [Message Broker API]: https://axiscommunications.github.io/acap-documentation/docs/api/src/api/message-broker/html/index.html
 // TODO: Add documentation.
+#![allow(unsafe_code)]
+
 use std::{any, ffi::CStr, marker::PhantomData, slice::from_raw_parts};
 
 use libc::c_void;

@@ -12,3 +12,6 @@ pkg-config = { workspace = true }
 
 [dependencies]
 libc = { workspace = true }
+
+[lints]
+workspace = true

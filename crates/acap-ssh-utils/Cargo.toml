@@ -17,3 +17,6 @@ url = { workspace = true }
 tar = { workspace = true }
 
 cli-version = { workspace = true }
+
+[lints]
+workspace = true

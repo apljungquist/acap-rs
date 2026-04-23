@@ -11,3 +11,6 @@ pkg-config = { workspace = true }
 
 [dependencies]
 glib-sys = { workspace = true }
+
+[lints]
+workspace = true

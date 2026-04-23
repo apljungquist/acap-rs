@@ -8,6 +8,7 @@
 //!
 //! [ACAP]: https://axiscommunications.github.io/acap-documentation/
 //! [License Key API]: https://axiscommunications.github.io/acap-documentation/docs/api/native-sdk-api.html#license-key-api
+#![allow(unsafe_code)]
 
 pub use ergo::{verify, Error};
 

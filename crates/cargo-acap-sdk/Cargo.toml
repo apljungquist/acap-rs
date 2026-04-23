@@ -18,3 +18,6 @@ acap-ssh-utils = { workspace = true }
 acap-vapix = { workspace = true }
 cargo-acap-build = { workspace = true }
 cli-version = { workspace = true }
+
+[lints]
+workspace = true

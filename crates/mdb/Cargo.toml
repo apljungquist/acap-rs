@@ -9,3 +9,6 @@ license = "MIT"
 libc = { workspace = true }
 log = { workspace = true }
 mdb-sys = { workspace = true }
+
+[lints]
+workspace = true

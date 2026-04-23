@@ -15,3 +15,6 @@ tempfile = { workspace = true }
 
 acap-build = { workspace = true }
 cli-version = { workspace = true }
+
+[lints]
+workspace = true

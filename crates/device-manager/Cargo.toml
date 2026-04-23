@@ -19,3 +19,6 @@ url = { workspace = true }
 
 acap-vapix = { workspace = true }
 cli-version = { workspace = true }
+
+[lints]
+workspace = true
