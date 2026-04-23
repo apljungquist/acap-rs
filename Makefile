@@ -88,7 +88,7 @@ stop:
 ## * <AXIS_PACKAGE> is recognized by `cargo-acap-build` as an ACAP app.
 ## * The app is installed on the device.
 ## * The app is stopped.
-## * The device has SSH enabled the ssh user root configured.
+## * The device has SSH enabled and the ssh user root configured.
 run:
 	CARGO_TARGET_DIR=target-$(AXIS_DEVICE_ARCH) \
 	cargo-acap-build --target $(AXIS_DEVICE_ARCH) -- -p $(AXIS_PACKAGE) --profile dev
@@ -105,7 +105,7 @@ run:
 ## * <AXIS_PACKAGE> is recognized by `cargo-acap-build` as an ACAP app.
 ## * The app is installed on the device.
 ## * The app is stopped.
-## * The device has SSH enabled the ssh user root configured.
+## * The device has SSH enabled and the ssh user root configured.
 test:
 	# The `scp` command below needs the wildcard to match exactly one file.
 	rm -r target/$(AXIS_DEVICE_ARCH)/$(AXIS_PACKAGE)-*/$(AXIS_PACKAGE) ||:
