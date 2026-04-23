@@ -239,8 +239,27 @@ fix_format:
 .PHONY: fix_format
 
 ## Attempt to fix lints automatically
+##
+## Scope matches `check_lint` so that running this addresses the warnings reported there.
 fix_lint:
-	cargo clippy --fix
+	cargo clippy \
+		--all-targets \
+		--fix \
+		--allow-dirty \
+		--allow-staged \
+		--locked \
+		--no-deps \
+		--workspace
+	CARGO_TARGET_DIR=target-$(AXIS_DEVICE_ARCH) \
+	cargo clippy \
+		--all-targets \
+		--fix \
+		--allow-dirty \
+		--allow-staged \
+		--locked \
+		--no-deps \
+		--target aarch64-unknown-linux-gnu \
+		--workspace
 .PHONY: fix_lint
 
 
